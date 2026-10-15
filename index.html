@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Karnaugh Map Simulator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one centred column. A map card (toolbar on top, grid below) and an answer card underneath. */
+:root {
+  /* colour */
+  --bg: #EDF0F3;
+  --surface: #FFFFFF;
+  --head: #E5EAEF;
+  --ink: #15202B;
+  --muted: #566573;
+  --line: #C8D1D9;
+  --grid: #6F7F8D;
+  --accent: #1D55B8;
+  --accent-ink: #FFFFFF;
+  --on: #DCE7F8;
+  --one: #1D55B8;
+  --zero: #8795A2;
+  --danger: #C21F2B;
+  --pen-ink: #15202B;
+  --pen-red: #D1242F;
+  --pen-blue: #2563EB;
+  --pen-green: #188A4A;
+  /* type */
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E141A;
+    --surface: #161F27;
+    --head: #1F2B35;
+    --ink: #E7EDF2;
+    --muted: #98A7B4;
+    --line: #2C3945;
+    --grid: #6A7B8A;
+    --accent: #6EA8FF;
+    --accent-ink: #0A1622;
+    --on: #203452;
+    --one: #8FBBFF;
+    --zero: #5B6B79;
+    --danger: #FF7B7B;
+    --pen-ink: #F2F5F8;
+    --pen-red: #FF6B6B;
+    --pen-blue: #6EA8FF;
+    --pen-green: #4FD08C;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E141A;
+  --surface: #161F27;
+  --head: #1F2B35;
+  --ink: #E7EDF2;
+  --muted: #98A7B4;
+  --line: #2C3945;
+  --grid: #6A7B8A;
+  --accent: #6EA8FF;
+  --accent-ink: #0A1622;
+  --on: #203452;
+  --one: #8FBBFF;
+  --zero: #5B6B79;
+  --danger: #FF7B7B;
+  --pen-ink: #F2F5F8;
+  --pen-red: #FF6B6B;
+  --pen-blue: #6EA8FF;
+  --pen-green: #4FD08C;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  padding-block: 24px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+button { font: inherit; color: inherit; }
+
+.wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(26px, 5vw, 34px);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  margin: 0;
+  text-wrap: balance;
+}
+.lede { margin: 6px 0 0; color: var(--muted); max-width: 60ch; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; min-width: 0; }
+
+/* toolbar */
+.toolbar { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-bottom: 1px solid var(--line); }
+.row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.lbl { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--surface); }
+.seg button {
+  appearance: none; border: 0; background: transparent; cursor: pointer;
+  padding: 8px 14px; min-height: 40px; min-width: 44px; font-weight: 500;
+}
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.btn {
+  appearance: none; border: 1px solid var(--line); background: var(--surface); cursor: pointer;
+  border-radius: 9px; padding: 8px 12px; min-height: 40px; font-weight: 500;
+}
+.btn:hover:not(:disabled) { border-color: var(--grid); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn[data-armed] { border-color: var(--danger); color: var(--danger); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.swatches { display: inline-flex; gap: 10px; align-items: center; }
+.swatch {
+  width: 28px; height: 28px; border-radius: 50%; padding: 0; cursor: pointer;
+  border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line);
+}
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
+.swatch[data-c="ink"] { background: var(--pen-ink); }
+.swatch[data-c="red"] { background: var(--pen-red); }
+.swatch[data-c="blue"] { background: var(--pen-blue); }
+.swatch[data-c="green"] { background: var(--pen-green); }
+.seg button:focus-visible, .btn:focus-visible, .swatch:focus-visible, .chip:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+/* map */
+.stage-host { display: flex; justify-content: center; padding: 14px 0 6px; overflow-x: auto; }
+.stage { position: relative; flex: none; width: fit-content; padding: var(--pad, 30px); }
+.kmap {
+  display: grid; width: max-content; background: var(--surface);
+  border-top: 2px solid var(--grid); border-left: 2px solid var(--grid);
+}
+.kmap > * { border-right: 2px solid var(--grid); border-bottom: 2px solid var(--grid); }
+.hd {
+  background: var(--head); display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-weight: 600; font-size: 15px;
+}
+.corner {
+  position: relative;
+  background-color: var(--head);
+  background-image: linear-gradient(to top right, transparent calc(50% - 1px), var(--grid) calc(50% - 1px), var(--grid) calc(50% + 1px), transparent calc(50% + 1px));
+}
+.corner span { position: absolute; font-family: var(--font-mono); font-weight: 600; font-size: 12px; }
+.corner .cv { top: 3px; right: 6px; }
+.corner .rv { bottom: 3px; left: 6px; }
+.kmap > .cell {
+  appearance: none; border-top: 0; border-left: 0; border-radius: 0; padding: 0; margin: 0;
+  background: var(--surface); cursor: default;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-weight: 500; line-height: 1;
+  font-size: calc(var(--cell, 80px) * 0.4);
+  color: var(--zero);
+}
+.tool-ones .kmap > .cell { cursor: pointer; }
+.tool-ones .kmap > .cell:hover { background: var(--on); }
+.kmap > .cell.on { background: var(--on); color: var(--one); font-weight: 600; }
+.kmap > .cell:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; }
+
+.ink { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; touch-action: none; }
+.tool-pen .ink, .tool-erase .ink { pointer-events: auto; cursor: crosshair; }
+.tool-erase .ink { cursor: none; }
+.ering {
+  position: absolute; display: none; width: 26px; height: 26px; border-radius: 50%;
+  border: 1.5px solid var(--ink); background: transparent; pointer-events: none; transform: translate(-50%, -50%);
+}
+.tip { margin: 0; padding: 4px 14px 14px; font-size: 13px; color: var(--muted); text-align: center; text-wrap: balance; }
+
+/* answer */
+.answer { padding: 16px 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+.answer h2 { margin: 0; font-family: var(--font-display); font-size: 19px; font-weight: 600; }
+.ans-row { display: flex; align-items: flex-start; gap: 10px; }
+.q { font-family: var(--font-mono); font-weight: 600; font-size: 20px; padding-top: 9px; }
+textarea {
+  flex: 1; min-width: 0; resize: vertical; min-height: 64px;
+  font-family: var(--font-mono); font-size: 18px; line-height: 1.5; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+}
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.chip {
+  appearance: none; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+  padding: 6px 12px; min-height: 36px; font-family: var(--font-mono); font-weight: 500;
+}
+.chip:hover { border-color: var(--grid); }
+.sep { width: 1px; height: 22px; background: var(--line); margin: 0 2px; }
+.hint { margin: 0; font-size: 13px; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+<style>body{margin:0}</style>
+</head>
+<body>
+
+
+<main class="wrap">
+  <header>
+    <h1>Karnaugh Map Simulator</h1>
+    <p class="lede">Place the 1s, draw your groups on the map, then write the expression.</p>
+  </header>
+
+  <section class="card" aria-label="Karnaugh map">
+    <div class="toolbar">
+      <div class="row">
+        <span class="lbl" id="nlbl">Variables</span>
+        <div class="seg" id="nseg" role="group" aria-labelledby="nlbl">
+          <button type="button" data-n="2" aria-pressed="false">2</button>
+          <button type="button" data-n="3" aria-pressed="false">3</button>
+          <button type="button" data-n="4" aria-pressed="false">4</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="seg" id="tools" role="group" aria-label="Tool">
+          <button type="button" data-tool="ones" aria-pressed="true">Place 1s</button>
+          <button type="button" data-tool="pen" aria-pressed="false">Pen</button>
+          <button type="button" data-tool="erase" aria-pressed="false">Eraser</button>
+        </div>
+        <div class="swatches" id="swatches" role="group" aria-label="Pen colour">
+          <button type="button" class="swatch" data-c="ink" aria-label="Ink" aria-pressed="true"></button>
+          <button type="button" class="swatch" data-c="red" aria-label="Red" aria-pressed="false"></button>
+          <button type="button" class="swatch" data-c="blue" aria-label="Blue" aria-pressed="false"></button>
+          <button type="button" class="swatch" data-c="green" aria-label="Green" aria-pressed="false"></button>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn" id="undo" disabled>Undo</button>
+          <button type="button" class="btn" id="clearInk">Clear drawing</button>
+          <button type="button" class="btn" id="clearOnes">Clear 1s</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage-host" id="host">
+      <div class="stage tool-ones" id="stage">
+        <div class="kmap" id="kmap"></div>
+        <canvas class="ink" id="ink" aria-hidden="true"></canvas>
+        <div class="ering" id="ering"></div>
+      </div>
+    </div>
+    <p class="tip" id="tip"></p>
+  </section>
+
+  <section class="card answer" aria-labelledby="ans-h">
+    <h2 id="ans-h">Your answer</h2>
+    <div class="ans-row">
+      <span class="q" aria-hidden="true">Q =</span>
+      <textarea id="ans" rows="2" spellcheck="false" autocomplete="off" autocapitalize="characters" aria-labelledby="ans-h" placeholder="Type your simplified expression"></textarea>
+    </div>
+    <div class="chips" id="chips"></div>
+    <p class="hint">Type it, or tap the buttons to add variables and operators at the cursor.</p>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  const CFG = {
+    2: { vars: ['A', 'B'], rowVars: 'A', colVars: 'B', rows: ['0', '1'], cols: ['0', '1'] },
+    3: { vars: ['A', 'B', 'C'], rowVars: 'A', colVars: 'BC', rows: ['0', '1'], cols: ['00', '01', '11', '10'] },
+    4: { vars: ['A', 'B', 'C', 'D'], rowVars: 'AB', colVars: 'CD', rows: ['00', '01', '11', '10'], cols: ['00', '01', '11', '10'] }
+  };
+  const CAP = { 2: 120, 3: 104, 4: 92 };
+  const PEN_W = 3.5;
+  const ERASE_W = 26;
+  const TIPS = {
+    ones: 'Tap a cell to place a 1. Tap it again to take it off.',
+    pen: 'Draw straight onto the map. There is space around the grid for groups that run off the edge.',
+    erase: 'Rub out any part of your drawing. Your 1s are not affected.'
+  };
+
+  const $ = (s) => document.querySelector(s);
+  const stage = $('#stage'), kmap = $('#kmap'), canvas = $('#ink'), ering = $('#ering');
+  const host = $('#host'), tipEl = $('#tip'), ans = $('#ans'), chips = $('#chips'), undoBtn = $('#undo');
+  const ctx = canvas.getContext('2d');
+
+  const state = { n: 3, tool: 'ones', pen: 'ink', cells: {}, strokes: {}, answers: {} };
+  [2, 3, 4].forEach((n) => {
+    state.cells[n] = new Array(CFG[n].rows.length * CFG[n].cols.length).fill(0);
+    state.strokes[n] = [];
+    state.answers[n] = '';
+  });
+
+  function el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  /* ---------- grid ---------- */
+  function renderCell(b, i) {
+    const c = CFG[state.n];
+    const v = state.cells[state.n][i];
+    const r = Math.floor(i / c.cols.length), k = i % c.cols.length;
+    b.textContent = v ? '1' : '0';
+    b.classList.toggle('on', !!v);
+    b.setAttribute('aria-pressed', v ? 'true' : 'false');
+    b.setAttribute('aria-label', c.rowVars + ' ' + c.rows[r] + ', ' + c.colVars + ' ' + c.cols[k] + ', value ' + (v ? 1 : 0));
+  }
+
+  function buildGrid() {
+    const c = CFG[state.n];
+    const cols = c.cols.length, rows = c.rows.length;
+    kmap.style.gridTemplateColumns = 'var(--hw) repeat(' + cols + ', var(--cell))';
+    kmap.style.gridTemplateRows = 'var(--hh) repeat(' + rows + ', var(--cell))';
+    kmap.textContent = '';
+    const corner = el('div', 'hd corner');
+    corner.appendChild(el('span', 'cv', c.colVars));
+    corner.appendChild(el('span', 'rv', c.rowVars));
+    kmap.appendChild(corner);
+    c.cols.forEach((code) => kmap.appendChild(el('div', 'hd', code)));
+    for (let r = 0; r < rows; r++) {
+      kmap.appendChild(el('div', 'hd', c.rows[r]));
+      for (let k = 0; k < cols; k++) {
+        const i = r * cols + k;
+        const b = el('button', 'cell');
+        b.type = 'button';
+        b.dataset.i = String(i);
+        renderCell(b, i);
+        kmap.appendChild(b);
+      }
+    }
+  }
+
+  kmap.addEventListener('click', (e) => {
+    const b = e.target.closest('.cell');
+    if (!b) return;
+    const i = Number(b.dataset.i);
+    const a = state.cells[state.n];
+    a[i] = a[i] ? 0 : 1;
+    renderCell(b, i);
+  });
+
+  /* ---------- sizing ---------- */
+  let W = 0, H = 0, lastW = -1;
+  function fit() {
+    const w = host.clientWidth;
+    const small = w < 460;
+    const pad = small ? 16 : 30, hw = small ? 46 : 58, hh = small ? 34 : 42;
+    const cols = CFG[state.n].cols.length;
+    const cell = Math.max(40, Math.min(CAP[state.n], Math.floor((w - 2 * pad - hw - 4) / cols)));
+    stage.style.setProperty('--pad', pad + 'px');
+    stage.style.setProperty('--hw', hw + 'px');
+    stage.style.setProperty('--hh', hh + 'px');
+    stage.style.setProperty('--cell', cell + 'px');
+    sizeCanvas();
+  }
+  function sizeCanvas() {
+    const r = stage.getBoundingClientRect();
+    W = r.width; H = r.height;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.max(1, Math.round(W * dpr));
+    canvas.height = Math.max(1, Math.round(H * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    redraw();
+  }
+  if ('ResizeObserver' in window) {
+    new ResizeObserver(() => {
+      const w = host.clientWidth;
+      if (w !== lastW) { lastW = w; fit(); }
+    }).observe(host);
+  }
+
+  /* ---------- drawing ---------- */
+  let COL = {};
+  function readColors() {
+    const cs = getComputedStyle(document.documentElement);
+    COL = {
+      ink: cs.getPropertyValue('--pen-ink').trim() || '#15202B',
+      red: cs.getPropertyValue('--pen-red').trim() || '#D1242F',
+      blue: cs.getPropertyValue('--pen-blue').trim() || '#2563EB',
+      green: cs.getPropertyValue('--pen-green').trim() || '#188A4A'
+    };
+  }
+  function applyStyle(s) {
+    const c = s.erase ? '#000' : COL[s.color];
+    ctx.globalCompositeOperation = s.erase ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = c;
+    ctx.fillStyle = c;
+    ctx.lineWidth = s.width;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  }
+  function paintStroke(s) {
+    const p = s.pts;
+    ctx.save();
+    applyStyle(s);
+    ctx.beginPath();
+    if (p.length === 1) {
+      ctx.arc(p[0][0] * W, p[0][1] * H, s.width / 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.moveTo(p[0][0] * W, p[0][1] * H);
+      for (let i = 1; i < p.length; i++) ctx.lineTo(p[i][0] * W, p[i][1] * H);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function paintSeg(s, i) {
+    const a = s.pts[i - 1], b = s.pts[i];
+    ctx.save();
+    applyStyle(s);
+    ctx.beginPath();
+    ctx.moveTo(a[0] * W, a[1] * H);
+    ctx.lineTo(b[0] * W, b[1] * H);
+    ctx.stroke();
+    ctx.restore();
+  }
+  function redraw() {
+    readColors();
+    ctx.clearRect(0, 0, W, H);
+    state.strokes[state.n].forEach(paintStroke);
+  }
+  function pos(e) {
+    const r = canvas.getBoundingClientRect();
+    return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
+  }
+  function moveRing(e) {
+    const r = stage.getBoundingClientRect();
+    ering.style.left = (e.clientX - r.left) + 'px';
+    ering.style.top = (e.clientY - r.top) + 'px';
+    ering.style.display = 'block';
+  }
+  function updateUndo() { undoBtn.disabled = state.strokes[state.n].length === 0; }
+
+  let cur = null;
+  canvas.addEventListener('pointerdown', (e) => {
+    if (state.tool === 'ones' || e.button > 0) return;
+    e.preventDefault();
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    readColors();
+    const erase = state.tool === 'erase';
+    cur = { erase: erase, color: state.pen, width: erase ? ERASE_W : PEN_W, pts: [pos(e)] };
+    state.strokes[state.n].push(cur);
+    paintStroke(cur);
+    if (erase) moveRing(e);
+    updateUndo();
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (state.tool === 'erase') moveRing(e);
+    if (!cur) return;
+    const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+    const list = evs.length ? evs : [e];
+    list.forEach((ev) => {
+      cur.pts.push(pos(ev));
+      paintSeg(cur, cur.pts.length - 1);
+    });
+  });
+  function endStroke(e) {
+    cur = null;
+    if (e && e.pointerType === 'touch') ering.style.display = 'none';
+  }
+  canvas.addEventListener('pointerup', endStroke);
+  canvas.addEventListener('pointercancel', endStroke);
+  canvas.addEventListener('pointerleave', () => { if (!cur) ering.style.display = 'none'; });
+
+  function undo() {
+    const s = state.strokes[state.n];
+    if (!s.length) return;
+    s.pop();
+    redraw();
+    updateUndo();
+  }
+  undoBtn.addEventListener('click', undo);
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+      const t = e.target;
+      if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT')) return;
+      e.preventDefault();
+      undo();
+    }
+  });
+
+  /* two-step buttons so a stray tap does not wipe work */
+  function armed(btn, label, fn) {
+    let timer = null;
+    btn.addEventListener('click', () => {
+      if (btn.hasAttribute('data-armed')) {
+        clearTimeout(timer);
+        btn.removeAttribute('data-armed');
+        btn.textContent = label;
+        fn();
+      } else {
+        btn.setAttribute('data-armed', '');
+        btn.textContent = 'Tap to confirm';
+        timer = setTimeout(() => {
+          btn.removeAttribute('data-armed');
+          btn.textContent = label;
+        }, 2500);
+      }
+    });
+  }
+  armed($('#clearInk'), 'Clear drawing', () => {
+    state.strokes[state.n].length = 0;
+    redraw();
+    updateUndo();
+  });
+  armed($('#clearOnes'), 'Clear 1s', () => {
+    state.cells[state.n].fill(0);
+    kmap.querySelectorAll('.cell').forEach((b) => renderCell(b, Number(b.dataset.i)));
+  });
+
+  /* ---------- tools ---------- */
+  function syncTools() {
+    document.querySelectorAll('#tools button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.tool === state.tool ? 'true' : 'false'));
+    document.querySelectorAll('#swatches button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.c === state.pen ? 'true' : 'false'));
+  }
+  function setTool(t) {
+    state.tool = t;
+    stage.className = 'stage tool-' + t;
+    ering.style.display = 'none';
+    tipEl.textContent = TIPS[t];
+    syncTools();
+  }
+  $('#tools').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-tool]');
+    if (b) setTool(b.dataset.tool);
+  });
+  $('#swatches').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-c]');
+    if (!b) return;
+    state.pen = b.dataset.c;
+    setTool('pen');
+  });
+
+  /* ---------- variables ---------- */
+  function setN(n) {
+    state.n = n;
+    document.querySelectorAll('#nseg button').forEach((b) => b.setAttribute('aria-pressed', Number(b.dataset.n) === n ? 'true' : 'false'));
+    buildGrid();
+    fit();
+    ans.value = state.answers[n];
+    buildChips();
+    updateUndo();
+  }
+  $('#nseg').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-n]');
+    if (b) setN(Number(b.dataset.n));
+  });
+
+  /* ---------- answer ---------- */
+  function chip(t, kind) {
+    const b = el('button', 'chip', t);
+    b.type = 'button';
+    b.dataset.tok = t;
+    b.dataset.kind = kind;
+    return b;
+  }
+  function buildChips() {
+    chips.textContent = '';
+    CFG[state.n].vars.forEach((v) => chips.appendChild(chip(v, 'var')));
+    chips.appendChild(el('span', 'sep'));
+    [['AND', 'word'], ['OR', 'word'], ['NOT', 'word'], ['(', 'open'], [')', 'close']].forEach((p) => chips.appendChild(chip(p[0], p[1])));
+  }
+  chips.addEventListener('click', (e) => {
+    const b = e.target.closest('.chip');
+    if (!b) return;
+    const kind = b.dataset.kind, tok = b.dataset.tok;
+    const s = typeof ans.selectionStart === 'number' ? ans.selectionStart : ans.value.length;
+    const en = typeof ans.selectionEnd === 'number' ? ans.selectionEnd : s;
+    const pre = ans.value.slice(0, s), post = ans.value.slice(en);
+    let lead = '', trail = '';
+    if (kind !== 'close' && pre && !/[\s(]$/.test(pre)) lead = ' ';
+    if (kind === 'word' && !/^[\s)]/.test(post)) trail = ' ';
+    const ins = lead + tok + trail;
+    ans.value = pre + ins + post;
+    const p = (pre + ins).length;
+    ans.focus();
+    ans.setSelectionRange(p, p);
+    state.answers[state.n] = ans.value;
+  });
+  ans.addEventListener('input', () => { state.answers[state.n] = ans.value; });
+
+  /* ---------- theme changes ---------- */
+  const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  if (mq && mq.addEventListener) mq.addEventListener('change', redraw);
+  new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  /* ---------- start ---------- */
+  setN(3);
+  setTool('ones');
+})();
+</script>
+
+</body>
+</html>
